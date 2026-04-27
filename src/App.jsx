@@ -1,52 +1,170 @@
 import { useState, useEffect, useRef } from "react";
 
-/* ─── Grid Background (Operations Control Tower vibe) ──────── */
+/* ─── Supply Chain 3D Background ───────────────────────────── */
 function GridCanvas() {
   const canvasRef = useRef(null);
   useEffect(() => {
     const c = canvasRef.current; if (!c) return;
     const ctx = c.getContext("2d");
-    let w, h, frame, offset = 0;
+    let w, h, frame;
+    // Isometric projection constants
+    const C = Math.cos(Math.PI / 6); // 0.866
+    const S = 0.5;
+    const T = Math.tan(Math.PI / 6); // 0.577
+
     const resize = () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; };
     resize();
+
+    // Draw a 3D isometric shipping container at screen pos (sx,sy)
+    // W=width, D=depth, H=height, alpha=opacity
+    const isoBox = (sx, sy, W, D, H, alpha) => {
+      if (alpha < 0.005 || W < 2 || H < 2) return;
+      // 8 vertices (bottom then top, front-left, front-right, back-right, back-left)
+      const fl=[sx,sy],           fr=[sx+W*C, sy+W*S];
+      const bl=[sx-D*C, sy+D*S],  br=[sx+W*C-D*C, sy+W*S+D*S];
+      const tl=[sx, sy-H],        tr=[sx+W*C, sy+W*S-H];
+      const tbl=[sx-D*C, sy+D*S-H], tbr=[sx+W*C-D*C, sy+W*S+D*S-H];
+
+      const face = (pts, a) => {
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,140,50,${a})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,140,50,${a * 0.55})`;
+        ctx.lineWidth = 0.5; ctx.stroke();
+      };
+
+      face([fl, bl, tbl, tl], alpha * 0.45);  // left face (shadow)
+      face([fl, fr, tr,  tl], alpha * 0.7);   // front face
+      face([tl, tr, tbr, tbl], alpha * 1.2);  // top face (light)
+
+      // Vertical container ribs on front face
+      const ribs = Math.max(2, Math.floor(W / 13));
+      for (let i = 1; i < ribs; i++) {
+        const f = i / ribs;
+        ctx.beginPath();
+        ctx.moveTo(fl[0] + (fr[0]-fl[0])*f, tl[1] + (tr[1]-tl[1])*f);
+        ctx.lineTo(fl[0] + (fr[0]-fl[0])*f, fl[1] + (fr[1]-fl[1])*f);
+        ctx.strokeStyle = `rgba(255,140,50,${alpha * 0.2})`;
+        ctx.lineWidth = 0.4; ctx.stroke();
+      }
+    };
+
+    // Build scene objects (reinitialised on resize)
+    const mkScene = () => {
+      const boxes = Array.from({ length: 14 }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        W: 36 + Math.random() * 54, D: 16 + Math.random() * 28, H: 15 + Math.random() * 28,
+        vx: (Math.random() - 0.5) * 0.22, vy: (Math.random() - 0.5) * 0.13,
+        ph: Math.random() * Math.PI * 2,
+        al: 0.04 + Math.random() * 0.065,
+      }));
+      const hubs = Array.from({ length: 9 }, () => ({
+        x: w * 0.08 + Math.random() * w * 0.84,
+        y: h * 0.08 + Math.random() * h * 0.84,
+        ph: Math.random() * Math.PI * 2,
+      }));
+      const routes = [];
+      for (let i = 0; i < hubs.length; i++)
+        for (let j = i + 1; j < hubs.length; j++)
+          if (Math.hypot(hubs[i].x-hubs[j].x, hubs[i].y-hubs[j].y) < Math.max(w,h) * 0.44)
+            routes.push({
+              x1:hubs[i].x, y1:hubs[i].y, x2:hubs[j].x, y2:hubs[j].y,
+              cx:(hubs[i].x+hubs[j].x)/2 + (Math.random()-0.5)*170,
+              cy:(hubs[i].y+hubs[j].y)/2 + (Math.random()-0.5)*170,
+            });
+      const pkgs = routes.map(r => ({
+        r, t: Math.random(), sp: 0.0007 + Math.random() * 0.001, trail: [],
+      }));
+      return { boxes, hubs, routes, pkgs };
+    };
+
+    let sc = mkScene();
+
+    // Quadratic bezier point
+    const qBez = (t, x1,y1,cx,cy,x2,y2) => ({
+      x: (1-t)**2*x1 + 2*(1-t)*t*cx + t**2*x2,
+      y: (1-t)**2*y1 + 2*(1-t)*t*cy + t**2*y2,
+    });
+
+    // Slow scrolling offset for grid (warehouse floor moving toward viewer)
+    let gOff = 0;
+
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
-      offset += 0.3;
-      // Horizontal moving grid lines
-      const spacing = 50;
-      ctx.strokeStyle = "rgba(255,140,50,0.04)";
-      ctx.lineWidth = 1;
-      for (let y = (offset % spacing); y < h; y += spacing) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
-      }
-      for (let x = 0; x < w; x += spacing) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
-      }
-      // floating nodes
       const time = Date.now() * 0.001;
-      for (let i = 0; i < 25; i++) {
-        const nx = (Math.sin(time * 0.3 + i * 1.7) * 0.5 + 0.5) * w;
-        const ny = (Math.cos(time * 0.2 + i * 2.3) * 0.5 + 0.5) * h;
-        ctx.beginPath(); ctx.arc(nx, ny, 2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,140,50,${0.15 + Math.sin(time + i) * 0.1})`;
-        ctx.fill();
-        // connection lines to nearby nodes
-        for (let j = i + 1; j < Math.min(i + 5, 25); j++) {
-          const mx = (Math.sin(time * 0.3 + j * 1.7) * 0.5 + 0.5) * w;
-          const my = (Math.cos(time * 0.2 + j * 2.3) * 0.5 + 0.5) * h;
-          const d = Math.hypot(nx - mx, ny - my);
-          if (d < 200) {
-            ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(mx, my);
-            ctx.strokeStyle = `rgba(255,140,50,${0.04 * (1 - d / 200)})`;
-            ctx.stroke();
-          }
-        }
+      gOff = (gOff + 0.18) % 90;
+      const { boxes, hubs, routes, pkgs } = sc;
+
+      // ── Isometric diamond floor grid ──
+      const GS = 90, inv = 1 / T;
+      ctx.lineWidth = 0.5; ctx.strokeStyle = "rgba(255,140,50,0.026)";
+      for (let x = -(h * inv + GS); x <= w + GS; x += GS) {
+        ctx.beginPath();
+        ctx.moveTo(x + gOff * inv, 0);
+        ctx.lineTo(x + gOff * inv + h * inv, h);
+        ctx.stroke();
       }
+      for (let x = -GS; x <= w + h * inv + GS; x += GS) {
+        ctx.beginPath();
+        ctx.moveTo(x - gOff * inv, 0);
+        ctx.lineTo(x - gOff * inv - h * inv, h);
+        ctx.stroke();
+      }
+
+      // ── Logistics route paths (dashed curves) ──
+      ctx.setLineDash([5, 14]); ctx.lineWidth = 1;
+      routes.forEach(r => {
+        ctx.beginPath(); ctx.moveTo(r.x1, r.y1);
+        ctx.quadraticCurveTo(r.cx, r.cy, r.x2, r.y2);
+        ctx.strokeStyle = "rgba(255,140,50,0.07)"; ctx.stroke();
+      });
+      ctx.setLineDash([]);
+
+      // ── Hub / warehouse nodes ──
+      hubs.forEach(hub => {
+        const p = Math.sin(time * 1.3 + hub.ph) * 0.5 + 0.5;
+        ctx.beginPath(); ctx.arc(hub.x, hub.y, 3 + p * 7, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,140,50,${0.06 + p * 0.1})`; ctx.lineWidth = 1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(hub.x, hub.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,140,50,${0.22 + p * 0.28})`; ctx.fill();
+      });
+
+      // ── In-transit packages along routes ──
+      pkgs.forEach(pkg => {
+        pkg.t += pkg.sp;
+        if (pkg.t > 1) { pkg.t = 0; pkg.trail = []; }
+        const pos = qBez(pkg.t, pkg.r.x1, pkg.r.y1, pkg.r.cx, pkg.r.cy, pkg.r.x2, pkg.r.y2);
+        pkg.trail.push({ ...pos });
+        if (pkg.trail.length > 22) pkg.trail.shift();
+        // Glowing trail
+        pkg.trail.forEach((tp, ti) => {
+          const a = ti / pkg.trail.length;
+          ctx.beginPath(); ctx.arc(tp.x, tp.y, 1.8 * a, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,200,80,${a * 0.32})`; ctx.fill();
+        });
+        // Small 3D package box
+        isoBox(pos.x - 4, pos.y, 8, 5, 6, 0.52);
+      });
+
+      // ── Drifting 3D shipping containers ──
+      boxes.forEach(b => {
+        b.x += b.vx; b.y += b.vy;
+        if (b.x < -b.W * 2) b.x = w + b.W;
+        if (b.x > w + b.W * 2) b.x = -b.W;
+        if (b.y < -b.H * 2) b.y = h + b.H;
+        if (b.y > h + b.H * 2) b.y = -b.H;
+        isoBox(b.x, b.y + Math.sin(time * 0.42 + b.ph) * 3, b.W, b.D, b.H, b.al);
+      });
+
       frame = requestAnimationFrame(draw);
     };
+
     draw();
-    window.addEventListener("resize", resize);
-    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", resize); };
+    const onResize = () => { resize(); sc = mkScene(); };
+    window.addEventListener("resize", onResize);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
   }, []);
   return <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none" }} />;
 }
