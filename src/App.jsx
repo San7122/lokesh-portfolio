@@ -7,75 +7,73 @@ function GridCanvas() {
     const c = canvasRef.current; if (!c) return;
     const ctx = c.getContext("2d");
     let w, h, frame;
-    const C = Math.cos(Math.PI / 6), S = 0.5; // iso projection constants
+    const C = Math.cos(Math.PI / 6), S = 0.5;
 
     const resize = () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; };
     resize();
 
-    // Isometric shipping container — stroke-first design so it reads as line art
-    const isoBox = (sx, sy, W, D, H, sA) => {
-      if (sA < 0.003 || W < 2) return;
-      const fA = sA * 0.13; // fill is subtle, edges carry the form
-      const fl=[sx,sy],        fr=[sx+W*C, sy+W*S];
-      const bl=[sx-D*C,sy+D*S],br=[sx+W*C-D*C, sy+W*S+D*S];
-      const tl=[sx,sy-H],      tr=[sx+W*C, sy+W*S-H];
-      const tbl=[sx-D*C,sy+D*S-H], tbr=[sx+W*C-D*C,sy+W*S+D*S-H];
+    // Isometric container: dark solid body + glowing orange edges
+    const isoBox = (sx, sy, W, D, H, glow) => {
+      if (W < 2 || H < 2) return;
+      const fl=[sx,sy],            fr=[sx+W*C,     sy+W*S];
+      const bl=[sx-D*C,  sy+D*S],  br=[sx+W*C-D*C, sy+W*S+D*S];
+      const tl=[sx,      sy-H],    tr=[sx+W*C,     sy+W*S-H];
+      const tbl=[sx-D*C, sy+D*S-H],tbr=[sx+W*C-D*C,sy+W*S+D*S-H];
 
-      const face = (pts, fa, sa) => {
+      const face = (pts, darkFill, edgeA) => {
         ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
         pts.slice(1).forEach(p=>ctx.lineTo(p[0],p[1])); ctx.closePath();
-        ctx.fillStyle=`rgba(255,140,50,${fa})`; ctx.fill();
-        ctx.strokeStyle=`rgba(255,140,50,${sa})`; ctx.lineWidth=0.7; ctx.stroke();
+        ctx.fillStyle = darkFill; ctx.fill();
+        ctx.strokeStyle = `rgba(255,140,50,${edgeA})`; ctx.lineWidth = 0.8; ctx.stroke();
       };
-      face([fl,bl,tbl,tl], fA*0.4, sA*0.45);   // left (shadow)
-      face([fl,fr,tr, tl], fA*0.75, sA*0.8);   // front
-      face([tl,tr,tbr,tbl], fA*1.4, sA);        // top (bright)
+      // Dark metallic fills, bright edges — premium container look
+      face([fl,bl,tbl,tl], 'rgba(12,8,4,0.85)',  glow * 0.5);  // left (shadow)
+      face([fl,fr,tr, tl], 'rgba(18,11,5,0.80)',  glow * 0.85); // front
+      face([tl,tr,tbr,tbl],'rgba(28,17,6,0.70)',  glow);        // top (lightest)
 
-      // Vertical ribs — give it the classic container look
-      const ribs = Math.max(2, Math.floor(W/14));
-      for (let i=1;i<ribs;i++) {
-        const f=i/ribs;
+      // Container ribs
+      const ribs = Math.max(2, Math.floor(W / 14));
+      for (let i = 1; i < ribs; i++) {
+        const f = i / ribs;
         ctx.beginPath();
         ctx.moveTo(fl[0]+(fr[0]-fl[0])*f, tl[1]+(tr[1]-tl[1])*f);
         ctx.lineTo(fl[0]+(fr[0]-fl[0])*f, fl[1]+(fr[1]-fl[1])*f);
-        ctx.strokeStyle=`rgba(255,140,50,${sA*0.25})`; ctx.lineWidth=0.35; ctx.stroke();
+        ctx.strokeStyle = `rgba(255,140,50,${glow*0.3})`; ctx.lineWidth=0.35; ctx.stroke();
       }
     };
 
-    // Stack helper — draws cols×(stack) containers at a base position
-    const drawStack = (baseX, baseY, cols, stack, W, D, H, sA, time, ph=0) => {
-      const colStepX = (W*C + D*C) + 3;
-      const colStepY = (W*S - D*S);
-      const floatY = Math.sin(time*0.38 + ph) * 2.5;
-      for (let col=0; col<cols; col++)
-        for (let row=0; row<stack; row++)
-          isoBox(
-            baseX + col*colStepX,
-            baseY + col*colStepY - row*H + floatY,
-            W, D, H, sA
-          );
+    // Draw one container yard: cols wide × rows tall, floating gently
+    const yard = (baseX, baseY, cols, rows, W, D, H, glow, floatY) => {
+      const sx = W*C + D*C + 3; // col step X
+      const sy = W*S - D*S;     // col step Y (iso drift)
+      for (let col = 0; col < cols; col++)
+        for (let row = 0; row < rows; row++)
+          isoBox(baseX + col*sx, baseY + col*sy - row*H + floatY, W, D, H, glow);
     };
 
-    // Route network (re-generated on resize)
-    const mkRoutes = () => {
-      const hubs = Array.from({length:8}, ()=>({
-        x: w*0.12+Math.random()*w*0.76, y: h*0.12+Math.random()*h*0.76,
-        ph: Math.random()*Math.PI*2,
-      }));
-      const routes = [];
-      for (let i=0;i<hubs.length;i++)
-        for (let j=i+1;j<hubs.length;j++)
-          if (Math.hypot(hubs[i].x-hubs[j].x,hubs[i].y-hubs[j].y) < Math.max(w,h)*0.42)
-            routes.push({
-              x1:hubs[i].x,y1:hubs[i].y,x2:hubs[j].x,y2:hubs[j].y,
-              cx:(hubs[i].x+hubs[j].x)/2+(Math.random()-.5)*160,
-              cy:(hubs[i].y+hubs[j].y)/2+(Math.random()-.5)*160,
-            });
-      const pkgs = routes.map(r=>({r, t:Math.random(), sp:0.0006+Math.random()*0.001, trail:[]}));
-      return {hubs, routes, pkgs};
+    // Fixed (deterministic) logistics network
+    const mkNet = () => {
+      const hubs = [
+        { x:w*0.22, y:h*0.28, ph:0.0 },
+        { x:w*0.42, y:h*0.18, ph:1.1 },
+        { x:w*0.58, y:h*0.82, ph:2.2 },
+        { x:w*0.78, y:h*0.72, ph:3.3 },
+        { x:w*0.38, y:h*0.55, ph:0.7 },
+        { x:w*0.62, y:h*0.45, ph:1.8 },
+      ];
+      const routes = [
+        { x1:hubs[0].x,y1:hubs[0].y, cx:w*0.32,cy:h*0.10, x2:hubs[1].x,y2:hubs[1].y },
+        { x1:hubs[1].x,y1:hubs[1].y, cx:w*0.52,cy:h*0.30, x2:hubs[5].x,y2:hubs[5].y },
+        { x1:hubs[5].x,y1:hubs[5].y, cx:w*0.70,cy:h*0.58, x2:hubs[3].x,y2:hubs[3].y },
+        { x1:hubs[4].x,y1:hubs[4].y, cx:w*0.50,cy:h*0.72, x2:hubs[2].x,y2:hubs[2].y },
+        { x1:hubs[0].x,y1:hubs[0].y, cx:w*0.40,cy:h*0.44, x2:hubs[4].x,y2:hubs[4].y },
+        { x1:hubs[2].x,y1:hubs[2].y, cx:w*0.68,cy:h*0.62, x2:hubs[3].x,y2:hubs[3].y },
+      ];
+      const pkgs = routes.map(r => ({ r, t:Math.random(), sp:0.0007+Math.random()*0.0009, trail:[] }));
+      return { hubs, routes, pkgs };
     };
 
-    let net = mkRoutes();
+    let net = mkNet();
     const qBez = (t,x1,y1,cx,cy,x2,y2) => ({
       x:(1-t)**2*x1+2*(1-t)*t*cx+t**2*x2,
       y:(1-t)**2*y1+2*(1-t)*t*cy+t**2*y2,
@@ -83,64 +81,68 @@ function GridCanvas() {
 
     const draw = () => {
       ctx.clearRect(0,0,w,h);
-      const time = Date.now()*.001;
-      const {hubs, routes, pkgs} = net;
+      const time = Date.now()*0.001;
+      const { hubs, routes, pkgs } = net;
 
-      // ── Very subtle converging lines (depth cue, not honeycomb) ──
-      ctx.lineWidth=0.4; ctx.strokeStyle="rgba(255,140,50,0.016)";
-      for (let x=-h; x<=w+h; x+=75) {
-        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+h*.58,h); ctx.stroke();
+      // Subtle depth lines (not a grid — just parallel diagonals for depth)
+      ctx.lineWidth=0.35; ctx.strokeStyle="rgba(255,140,50,0.014)";
+      for (let x = -h; x <= w+h; x += 80) {
+        ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+h*0.6,h); ctx.stroke();
       }
 
-      // ── Organised container stacks — port terminal look ──
-      const W=40, D=19, H=19;
-      // Left terminal (3 rows of stacks, 2 high)
-      drawStack(w*0.014, h*0.38, 4, 2, W, D, H, 0.28, time, 0);
-      drawStack(w*0.014, h*0.62, 4, 3, W, D, H, 0.22, time, 1);
-      drawStack(w*0.014, h*0.82, 3, 2, W, D, H, 0.18, time, 2);
-      // Right terminal
-      drawStack(w*0.77, h*0.18, 4, 3, W, D, H, 0.26, time, 3);
-      drawStack(w*0.79, h*0.52, 3, 2, W, D, H, 0.2,  time, 4);
-      drawStack(w*0.77, h*0.76, 4, 2, W, D, H, 0.16, time, 5);
+      // ── BOTTOM-LEFT YARD (origin terminal) ──
+      const W=48, D=22, H=20;
+      const cols = w > 1200 ? 6 : w > 900 ? 5 : 4;
+      const floatA = Math.sin(time*0.35)*2.5;
+      // Anchor bottom-left: baseY high enough that 3-row stack fits above h
+      yard(w*0.012, h*0.92, cols, 3, W, D, H, 0.38, floatA);
 
-      // ── Route paths (dashed logistics lines) ──
-      ctx.setLineDash([5,12]); ctx.lineWidth=1;
+      // ── TOP-RIGHT YARD (destination terminal) ──
+      const colSX = W*C + D*C + 3;
+      const rx = w - cols*colSX - w*0.03;
+      const floatB = Math.sin(time*0.35+1.6)*2.5;
+      yard(rx, h*0.10, cols, 3, W, D, H, 0.32, floatB);
+
+      // ── Dashed route lines ──
+      ctx.setLineDash([5,13]); ctx.lineWidth=1;
       routes.forEach(r=>{
         ctx.beginPath(); ctx.moveTo(r.x1,r.y1);
         ctx.quadraticCurveTo(r.cx,r.cy,r.x2,r.y2);
-        ctx.strokeStyle="rgba(255,140,50,0.08)"; ctx.stroke();
+        ctx.strokeStyle="rgba(255,140,50,0.09)"; ctx.stroke();
       });
       ctx.setLineDash([]);
 
-      // ── Hub / warehouse nodes ──
+      // ── Hub nodes (warehouse/depot markers) ──
       hubs.forEach(hub=>{
-        const p=Math.sin(time*1.3+hub.ph)*.5+.5;
+        const p = Math.sin(time*1.3+hub.ph)*0.5+0.5;
         ctx.beginPath(); ctx.arc(hub.x,hub.y,3+p*6,0,Math.PI*2);
-        ctx.strokeStyle=`rgba(255,140,50,${.07+p*.1})`; ctx.lineWidth=1; ctx.stroke();
+        ctx.strokeStyle=`rgba(255,140,50,${0.07+p*0.11})`; ctx.lineWidth=1; ctx.stroke();
         ctx.beginPath(); ctx.arc(hub.x,hub.y,3,0,Math.PI*2);
-        ctx.fillStyle=`rgba(255,140,50,${.22+p*.26})`; ctx.fill();
+        ctx.fillStyle=`rgba(255,140,50,${0.25+p*0.28})`; ctx.fill();
       });
 
-      // ── In-transit packages with glowing trails ──
+      // ── Moving packages (mini iso boxes + glow trail) ──
       pkgs.forEach(pkg=>{
-        pkg.t+=pkg.sp; if(pkg.t>1){pkg.t=0;pkg.trail=[];}
-        const pos=qBez(pkg.t,pkg.r.x1,pkg.r.y1,pkg.r.cx,pkg.r.cy,pkg.r.x2,pkg.r.y2);
-        pkg.trail.push({...pos}); if(pkg.trail.length>20) pkg.trail.shift();
+        pkg.t += pkg.sp;
+        if (pkg.t > 1) { pkg.t=0; pkg.trail=[]; }
+        const pos = qBez(pkg.t, pkg.r.x1,pkg.r.y1,pkg.r.cx,pkg.r.cy,pkg.r.x2,pkg.r.y2);
+        pkg.trail.push({...pos});
+        if (pkg.trail.length > 22) pkg.trail.shift();
         pkg.trail.forEach((tp,ti)=>{
-          const a=ti/pkg.trail.length;
-          ctx.beginPath(); ctx.arc(tp.x,tp.y,1.6*a,0,Math.PI*2);
-          ctx.fillStyle=`rgba(255,190,70,${a*.3})`; ctx.fill();
+          const a = ti/pkg.trail.length;
+          ctx.beginPath(); ctx.arc(tp.x,tp.y,1.7*a,0,Math.PI*2);
+          ctx.fillStyle=`rgba(255,195,70,${a*0.32})`; ctx.fill();
         });
-        isoBox(pos.x-3.5, pos.y, 7, 4, 5, 0.55);
+        isoBox(pos.x-3.5, pos.y, 8, 5, 6, 0.6);
       });
 
-      frame=requestAnimationFrame(draw);
+      frame = requestAnimationFrame(draw);
     };
 
     draw();
-    const onResize=()=>{resize(); net=mkRoutes();};
-    window.addEventListener("resize",onResize);
-    return ()=>{cancelAnimationFrame(frame); window.removeEventListener("resize",onResize);};
+    const onResize = () => { resize(); net = mkNet(); };
+    window.addEventListener("resize", onResize);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", onResize); };
   },[]);
   return <canvas ref={canvasRef} style={{position:"fixed",inset:0,zIndex:0,pointerEvents:"none"}}/>;
 }
