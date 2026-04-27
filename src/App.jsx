@@ -313,11 +313,11 @@ export default function Portfolio() {
           </p>
 
           <div style={{ display:"flex",gap:16,justifyContent:"center",flexWrap:"wrap",transform:"translateZ(5px)" }}>
-            <a href="mailto:lokeshkr21oct@gmail.com" style={{ padding:"13px 32px",borderRadius:8,fontSize:14,fontWeight:700,fontFamily:sf,background:"linear-gradient(135deg,#ff8c32,#ff4444)",color:"#0b0e14",transition:"all 0.35s",textTransform:"uppercase",letterSpacing:1 }}
+            <a href="#contact" style={{ padding:"13px 32px",borderRadius:8,fontSize:14,fontWeight:700,fontFamily:sf,background:"linear-gradient(135deg,#ff8c32,#ff4444)",color:"#0b0e14",transition:"all 0.35s",textTransform:"uppercase",letterSpacing:1,display:"inline-block" }}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 40px rgba(255,140,50,0.3)"}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=""}}
             >Contact Me</a>
-            <a href="#experience" style={{ padding:"13px 32px",borderRadius:8,fontSize:14,fontWeight:700,fontFamily:sf,border:"1px solid rgba(255,140,50,0.3)",color:"#ff8c32",textTransform:"uppercase",letterSpacing:1,transition:"all 0.35s" }}
+            <a href="#experience" style={{ padding:"13px 32px",borderRadius:8,fontSize:14,fontWeight:700,fontFamily:sf,border:"1px solid rgba(255,140,50,0.3)",color:"#ff8c32",textTransform:"uppercase",letterSpacing:1,transition:"all 0.35s",display:"inline-block" }}
               onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,140,50,0.08)";e.currentTarget.style.transform="translateY(-3px)"}}
               onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.transform=""}}
             >View Experience</a>
@@ -433,7 +433,7 @@ export default function Portfolio() {
       </section>
 
       {/* ═══ CONTACT ═══ */}
-      <section ref={contactRef} style={{ ...container,...contactSt,padding:"100px 24px 70px",textAlign:"center" }}>
+      <section id="contact" ref={contactRef} style={{ ...container,...contactSt,padding:"100px 24px 70px",textAlign:"center" }}>
         <h2 style={sTitle}>Connect</h2>
         <div style={{ ...bar,margin:"0 auto 44px" }} />
         <p style={{ fontSize:15,color:"#6a6660",maxWidth:520,margin:"0 auto 36px",lineHeight:1.8 }}>
